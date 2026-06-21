@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { CartItem, DeployMode } from '../../types';
 import { weaponById, categoryById } from '../../data';
+import { sound } from '../../audio/sound';
 
 const VAULT_BALANCE = 1420000;
 
@@ -124,13 +125,13 @@ export default function Cart({ cart, onUpdateMode, onUpdateAddress, onRemove, on
                             data-mode="DROP"
                             disabled={!canDrop}
                             className={it.mode==='DROP'?'on':''}
-                            onClick={() => onUpdateMode(w.id, 'DROP')}
+                            onClick={() => { onUpdateMode(w.id, 'DROP'); sound.play('click'); }}
                           >DROP</button>
                           <button
                             data-mode="DELIVER"
                             disabled={!canDeliver}
                             className={it.mode==='DELIVER'?'on':''}
-                            onClick={() => onUpdateMode(w.id, 'DELIVER')}
+                            onClick={() => { onUpdateMode(w.id, 'DELIVER'); sound.play('click'); }}
                           >DELIVER</button>
                         </div>
                       </div>
@@ -142,12 +143,12 @@ export default function Cart({ cart, onUpdateMode, onUpdateAddress, onRemove, on
                             <div>LAT&nbsp;<span className="v">{it.target.lat.toFixed(2)}°</span></div>
                             <div>LON&nbsp;<span className="v">{it.target.lon.toFixed(2)}°</span></div>
                             <div>REGION&nbsp;<span className="v">{it.target.region}</span></div>
-                            <button className="pickbtn set" onClick={() => onOpenPicker(w.id)}>▸ RETARGET</button>
+                            <button className="pickbtn set" onClick={() => { onOpenPicker(w.id); sound.play('click'); }}>▸ RETARGET</button>
                           </>
                         ) : (
                           <>
                             <div>TARGET&nbsp;<span className="v pending">NOT SET</span></div>
-                            <button className="pickbtn" onClick={() => onOpenPicker(w.id)}>▸ PICK COORDINATES</button>
+                            <button className="pickbtn" onClick={() => { onOpenPicker(w.id); sound.play('click'); }}>▸ PICK COORDINATES</button>
                           </>
                         )
                       ) : (

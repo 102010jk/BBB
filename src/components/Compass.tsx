@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Route } from '../types';
+import { sound } from '../audio/sound';
 
 const COMPASS_ROUTES: { id: Route | 'landing'; label: string; disc?: boolean }[] = [
   { id: 'arsenal',     label: 'ARSENAL'    },
@@ -121,6 +122,7 @@ export default function Compass({ route, onNavigate }: Props) {
               key={r.id}
               className={`item${r.disc ? ' disc' : ''}${i === activeIdx ? ' active' : ''}`}
               onClick={() => select(i, true)}
+              onMouseEnter={() => { if (i !== activeIdx) sound.play('hover'); }}
             >
               {r.label}
             </div>

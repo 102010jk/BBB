@@ -1,4 +1,4 @@
-import { Category, DeployMode, Weapon } from './types';
+import { Category, Weapon } from './types';
 
 export const CATEGORIES: Category[] = [
   { id:'grenades', name:'HAND GRENADES',  deploy:['DELIVER'],            desc:'Personal-issue ordnance. Subsonic, fragmentation, thermobaric.' },
@@ -103,11 +103,3 @@ export function weaponById(id: string): Weapon | undefined {
 export function weaponsInCategory(catId: string): Weapon[] {
   return WEAPONS.filter(w => w.cat === catId);
 }
-
-export const DEFAULT_DEPLOY: Record<string, DeployMode> = {
-  grenades: 'DELIVER',
-  lasers: 'DROP',
-  nukes: 'DROP',
-  drones: 'DROP',
-  missiles: 'DROP',
-};

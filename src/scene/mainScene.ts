@@ -5,6 +5,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import gsap from 'gsap';
 import { Route, SceneConfig, SceneController, TweakState } from '../types';
+import { sound } from '../audio/sound';
 
 const MENU_ITEMS = [
   { id: 'arsenal',     label: 'ARSENAL'     },
@@ -229,7 +230,7 @@ export function initMainScene(config: SceneConfig): SceneController {
     const el = document.createElement('div');
     el.className = 'menu-label';
     el.textContent = it.label;
-    el.addEventListener('mouseenter', () => { state.hoverIndex = i; });
+    el.addEventListener('mouseenter', () => { state.hoverIndex = i; sound.play('hover'); });
     el.addEventListener('mouseleave', () => { if (state.hoverIndex === i) state.hoverIndex = -1; });
     el.addEventListener('click', () => goRoute(it.id as Route));
     domMenuEl.appendChild(el);
@@ -249,6 +250,7 @@ export function initMainScene(config: SceneConfig): SceneController {
   // goRoute — does glitch + camera, then notifies React
   function goRoute(route: Route) {
     if (route === state.route) return;
+    sound.play('nav');
     const peak = state.glitchIntensity * 1.3;
     gsap.killTweensOf(state, 'glitch');
     gsap.fromTo(state, { glitch: 0 }, {
@@ -293,8 +295,10 @@ export function initMainScene(config: SceneConfig): SceneController {
   let fpsSamples: number[] = [];
   let lastFpsT = 0;
   let animId: number;
+  let paused = false;
 
   function animate() {
+    if (paused) return;
     animId = requestAnimationFrame(animate);
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
@@ -411,6 +415,19 @@ export function initMainScene(config: SceneConfig): SceneController {
   }
   window.addEventListener('resize', onResize);
 
+  // Pause the render loop while the tab is hidden (saves battery/GPU).
+  function onVisibility() {
+    if (document.hidden) {
+      paused = true;
+      cancelAnimationFrame(animId);
+    } else if (paused) {
+      paused = false;
+      clock.getDelta(); // discard the long gap so motion doesn't jump
+      animate();
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibility);
+
   // Keyboard shortcuts
   function onKeydown(e: KeyboardEvent) {
     if (e.target && ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA')) return;
@@ -433,9 +450,11 @@ export function initMainScene(config: SceneConfig): SceneController {
   }
 
   function dispose() {
+    paused = true;
     cancelAnimationFrame(animId);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('keydown', onKeydown);
+    document.removeEventListener('visibilitychange', onVisibility);
     renderer.dispose();
     composer.dispose();
     domMenuEl.innerHTML = '';

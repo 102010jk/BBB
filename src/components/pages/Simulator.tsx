@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { initSimScene, SimController } from '../../scene/simScene';
 import { SimAnalytics, SceneController } from '../../types';
 import { CATEGORIES, weaponsInCategory, weaponById } from '../../data';
+import { sound } from '../../audio/sound';
 
 interface LogEntry { t: string; msg: string; kind: string; }
 
@@ -144,7 +145,8 @@ export default function Simulator({ isActive, simWeapon, onSimWeaponChange, main
                   <div
                     key={w.id}
                     className={`row${simWeapon===w.id?' active':''}`}
-                    onClick={() => onSimWeaponChange(w.id)}
+                    onClick={() => { onSimWeaponChange(w.id); sound.play('click'); }}
+                    onMouseEnter={() => sound.play('hover')}
                   >
                     <span>{w.name}</span>
                     <span className="y">{cat.deploy.includes('DROP') ? '·' : '×'}</span>
@@ -160,7 +162,15 @@ export default function Simulator({ isActive, simWeapon, onSimWeaponChange, main
           <div className="center-info"><kbd>CLICK</kbd>DEPLOY · <kbd>DRAG</kbd>ROTATE</div>
         </div>
         <div className="analytics">
-          <h3>// LIVE ANALYTICS</h3>
+          <div className="analytics-head">
+            <h3>// LIVE ANALYTICS</h3>
+            <button
+              type="button"
+              className="reset-btn"
+              onClick={() => ctrlRef.current?.reset()}
+              title="Clear all impacts and zero the registry"
+            >▸ RESET</button>
+          </div>
           <div className="stat-big">
             <div className="k">EST. CASUALTIES</div>
             <div className="v red" ref={casRef}>0</div>

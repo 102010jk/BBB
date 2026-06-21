@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { initPickScene, PickController } from '../../scene/pickScene';
 import { CartItem, Target } from '../../types';
 import { weaponById } from '../../data';
+import { sound } from '../../audio/sound';
 
 interface Props {
   open: boolean;
@@ -29,7 +30,7 @@ export default function PickOverlay({ open, weaponId, cart, onConfirm, onCancel,
     const ctrl = initPickScene(
       canvasRef.current,
       stageRef.current,
-      (t) => setPicked(t),
+      (t) => { setPicked(t); sound.play('click'); },
     );
     ctrlRef.current = ctrl;
     // Start hidden
@@ -74,7 +75,7 @@ export default function PickOverlay({ open, weaponId, cart, onConfirm, onCancel,
           <h2>Set <em>target</em>.</h2>
           <div className="sub">{w ? `${w.code} · ${w.name} — SELECT IMPACT POINT` : '— SELECT A POINT ON THE PLANET'}</div>
         </div>
-        <button className="btn ghost" onClick={onCancel}>▸ CANCEL</button>
+        <button className="btn ghost" onClick={() => { sound.play('click'); onCancel(); }}>▸ CANCEL</button>
       </div>
       <div className="pick-stage" ref={stageRef}>
         <canvas ref={canvasRef} />
@@ -92,6 +93,7 @@ export default function PickOverlay({ open, weaponId, cart, onConfirm, onCancel,
           style={{ opacity: picked ? 1 : 0.3 }}
           onClick={() => {
             if (picked && weaponId) {
+              sound.play('lock');
               onConfirm(weaponId, { lat: picked.lat, lon: picked.lon, region: picked.region });
               onShowToast('▸ COORDINATES LOCKED', picked.region);
             }

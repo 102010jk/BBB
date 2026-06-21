@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Route, CartItem, TweakState, ToastState, SceneController, DeployMode, Target } from './types';
 import { initMainScene } from './scene/index';
 import { categoryById, weaponById } from './data';
+import { sound } from './audio/sound';
 
 import HUD from './components/HUD';
 import Compass from './components/Compass';
@@ -22,8 +23,8 @@ const TWEAK_DEFAULTS: TweakState = {
 
 const INITIAL_CART: CartItem[] = [
   { weaponId: 'n-strat', mode: 'DROP',    target: null, address: null },
-  { weaponId: 'g-therm', mode: 'DELIVER', target: null, address: '24 Krasnoarmeyskaya Ul, Kyiv' },
-  { weaponId: 'l-lance', mode: 'DROP',    target: { lat: 34.1, lon: 131.5, region: 'ASIA' }, address: null },
+  { weaponId: 'g-therm', mode: 'DELIVER', target: null, address: 'Hangar 7, Cobalt Spire, Sector ND-9' },
+  { weaponId: 'l-lance', mode: 'DROP',    target: { lat: 9.0, lon: -140.0, region: 'INTL. WATERS' }, address: null },
 ];
 
 export default function App() {
@@ -68,18 +69,34 @@ export default function App() {
     return () => { ctrl.dispose(); sceneRef.current = null; };
   }, []);
 
-  // Intro glitch after load
+  // Intro glitch after load (skipped when the user prefers reduced motion)
   useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     const t = setTimeout(() => {
-      sceneRef.current?.triggerGlitch(
-        (TWEAK_DEFAULTS.glitchIntensity * 1.5) as any
-      );
+      sceneRef.current?.triggerGlitch(TWEAK_DEFAULTS.glitchIntensity * 1.5);
     }, 1100);
     return () => clearTimeout(t);
   }, []);
 
+  // Unlock the audio engine on the first user gesture (autoplay policy).
+  useEffect(() => {
+    const unlock = () => sound.unlock();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  // Ambient drone: fuller on the landing, quieter (but present) inside pages.
+  useEffect(() => {
+    sound.setAmbient(route === 'landing' ? 1 : 0.45);
+  }, [route]);
+
   const showToast = useCallback((line: string, sub: string, red = false) => {
     setToast({ line, sub, red });
+    sound.play(red ? 'denied' : 'toast');
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToast(null), 1800);
   }, []);
@@ -98,6 +115,7 @@ export default function App() {
       const cat = categoryById(w.cat);
       if (!cat) return prev;
       const mode: DeployMode = cat.deploy[0];
+      sound.play('add');
       return [...prev, { weaponId, mode, target: null, address: null }];
     });
   }, []);
@@ -114,6 +132,7 @@ export default function App() {
   }, []);
 
   const removeFromCart = useCallback((weaponId: string) => {
+    sound.play('remove');
     setCart(prev => prev.filter(it => it.weaponId !== weaponId));
   }, []);
 

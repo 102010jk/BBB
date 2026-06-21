@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Route, ToastState } from '../types';
+import { sound } from '../audio/sound';
 
 interface HUDProps {
   route: Route;
@@ -12,8 +13,19 @@ interface HUDProps {
 
 export default function HUD({ route, flashRef, domMenuRef, fpsRef, toast }: HUDProps) {
   const [cfTime, setCfTime] = useState('--:--:--');
+  const [muted, setMuted] = useState(sound.muted);
   const toastRef    = useRef<HTMLDivElement>(null);
   const bracketsRef = useRef<HTMLDivElement>(null);
+
+  const toggleSound = () => {
+    sound.unlock();
+    const m = sound.toggleMuted();
+    setMuted(m);
+    if (!m) {
+      sound.play('click');
+      sound.setAmbient(route === 'landing' ? 1 : 0.45);
+    }
+  };
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -79,6 +91,19 @@ export default function HUD({ route, flashRef, domMenuRef, fpsRef, toast }: HUDP
           <span>FPS&nbsp;<span className="v" ref={fpsRef}>--</span></span>
           <span>UPLINK&nbsp;<span className="v" style={{ color:'var(--green)' }}>OK</span></span>
           <span><span className="pulse red" style={{ marginRight:6 }} />OP-SEC: <span className="v" style={{ color:'var(--red)' }}>RED</span></span>
+          <button
+            type="button"
+            className={`sound-toggle${muted ? ' muted' : ''}`}
+            onClick={toggleSound}
+            aria-pressed={!muted}
+            aria-label={muted ? 'Enable sound' : 'Mute sound'}
+            title={muted ? 'AUDIO: MUTED' : 'AUDIO: ON'}
+          >
+            <span className="ico" aria-hidden="true">
+              {muted ? '▸✕' : '▸♪'}
+            </span>
+            <span className="bars" aria-hidden="true"><i /><i /><i /><i /></span>
+          </button>
         </div>
       </div>
 

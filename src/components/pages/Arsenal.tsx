@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { CATEGORIES, WEAPONS, weaponById, weaponsInCategory, categoryById } from '../../data';
+import { CATEGORIES, weaponById, weaponsInCategory, categoryById } from '../../data';
 import { CartItem, Weapon } from '../../types';
+import { sound } from '../../audio/sound';
 
 interface Props {
   cart: CartItem[];
@@ -189,7 +190,7 @@ export default function Arsenal({ cart, onAddToCart, onNavigateToSim, isActive }
               const isOpen = openCat === cat.id;
               return (
                 <div key={cat.id} className={`cat${isOpen?' open':''}`}>
-                  <div className="cat-head" onClick={() => setOpenCat(isOpen ? null : cat.id)}>
+                  <div className="cat-head" onClick={() => { setOpenCat(isOpen ? null : cat.id); sound.play('click'); }}>
                     <div className="name">▸ {cat.name}</div>
                     <div className="meta">
                       <span>{cat.deploy.join(' / ')}</span>
@@ -202,7 +203,8 @@ export default function Arsenal({ cart, onAddToCart, onNavigateToSim, isActive }
                       <div
                         key={w.id}
                         className={`weapon${selected===w.id?' active':''}`}
-                        onClick={() => setSelected(w.id)}
+                        onClick={() => { setSelected(w.id); sound.play('click'); }}
+                        onMouseEnter={() => sound.play('hover')}
                       >
                         <span>{w.code}&nbsp;&nbsp;{w.name}</span>
                         <span className="price">${w.price.toLocaleString()}</span>
