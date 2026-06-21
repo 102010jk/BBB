@@ -68,6 +68,7 @@ export default function HUD({ route, flashRef, domMenuRef, fpsRef, toast }: HUDP
   const topRoute = route === 'landing' ? 'CHANNEL OPEN' : 'CHANNEL: ' + route.toUpperCase();
 
   return (
+    <>
     <div className="hud">
       <div className="scan" />
       <div className="vignette" />
@@ -123,14 +124,15 @@ export default function HUD({ route, flashRef, domMenuRef, fpsRef, toast }: HUDP
           <div>SESSION&nbsp;<span className="v">7FD9-EAGLE-77</span>&nbsp;·&nbsp;ENCRYPTION&nbsp;<span className="v" style={{ color:'var(--green)' }}>AES-512</span></div>
         </div>
       )}
+    </div>
 
-      {/* Toast — GSAP-animated wrapper */}
-      <div className="toast-positioner" ref={toastRef} style={{ opacity: 0 }}>
-        <div className={`toast${toast?.red ? ' red' : ''}`}>
-          {toast?.line}
-          {toast?.sub && <span className="small">{toast.sub}</span>}
-        </div>
+    {/* Toast — rendered outside .hud so it stacks above the pages */}
+    <div className="toast-positioner" ref={toastRef} style={{ opacity: 0 }}>
+      <div className={`toast${toast?.red ? ' red' : ''}`}>
+        {toast?.line}
+        {toast?.sub && <span className="small">{toast.sub}</span>}
       </div>
     </div>
+    </>
   );
 }

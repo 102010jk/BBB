@@ -431,7 +431,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .splash .logo em{color:var(--red);font-style:italic;font-weight:400}
 
 /* toast */
-.toast-positioner{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:40;will-change:transform,opacity}
+.toast-positioner{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:60;will-change:transform,opacity}
 .toast{background:rgba(0,0,0,.88);border:1px solid var(--green);color:var(--green);padding:24px 36px;font-size:14px;letter-spacing:.4em;text-transform:uppercase;box-shadow:0 0 0 1px #000, 0 0 40px var(--green-glow);}
 .toast .small{display:block;font-size:9.5px;color:var(--dim);margin-top:8px;letter-spacing:.3em}
 .toast.red{border-color:var(--red);color:var(--red);box-shadow:0 0 0 1px #000, 0 0 40px var(--red-glow)}

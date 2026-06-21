@@ -21,6 +21,14 @@ export interface SimController {
   reset: () => void;
 }
 
+interface Palette { core: number; mid: number; glow: number; scorch: number; glowCss: string; }
+const EXPLOSION: Palette = { core: 0xfff2d0, mid: 0xff7a1a, glow: 0xdc2626, scorch: 0x140a06, glowCss: 'rgba(220,38,38,0.55)' };
+const LASER:     Palette = { core: 0xe6fff0, mid: 0x7dff8e, glow: 0x7dff8e, scorch: 0x07300f, glowCss: 'rgba(125,255,142,0.5)' };
+
+const R_SURFACE = 1.4;   // earth radius
+const R_ABOVE   = 1.405; // decals, just above the surface
+const STATION_R = 3.0;   // orbital platform distance from centre
+
 export function initSimScene(config: SimConfig): SimController {
   const { stageEl, getSelectedWeapon, onAnalyticsUpdate, onTargetCoords, onLog, triggerGlitch } = config;
 
@@ -28,7 +36,7 @@ export function initSimScene(config: SimConfig): SimController {
   canvasEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   stageEl.prepend(canvasEl);
 
-  // 2D impact flash overlay (color set per shot).
+  // 2D impact flash overlay (colour set per shot).
   const flashEl = document.createElement('div');
   flashEl.className = 'sim-flash';
   stageEl.appendChild(flashEl);
@@ -42,7 +50,7 @@ export function initSimScene(config: SimConfig): SimController {
   const simCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   simCamera.position.set(0, 0, 4.6);
 
-  const earth: EarthGroup = buildEarth(1.4);
+  const earth: EarthGroup = buildEarth(R_SURFACE);
   simScene.add(earth);
   addEarthLights(simScene);
 
@@ -62,16 +70,45 @@ export function initSimScene(config: SimConfig): SimController {
   let isDragging = false;
   let lastMouse: { x: number; y: number } | null = null;
   let animId: number;
+  let cinematic = false;                       // blocks input + auto-spin during the laser sequence
+  const camLook = new THREE.Vector3(0, 0, 0);  // camera aim, animated for cinematics
 
   const analytics: SimAnalytics = { casualties: 0, radius: 0, cost: 0, halflife: 0, sparkHistory: [] };
 
-  // Persistent impact markers (craters) so the sandbox can be purged on reset.
-  const craters: THREE.Mesh[] = [];
-  const CRATER_CAP = 60;
+  // Persistent marks (craters + scorch decals) so the sandbox can be purged.
+  const marks: THREE.Object3D[] = [];
+  const MARK_CAP = 90;
   const CAM_HOME = new THREE.Vector3(0, 0, 4.6);
 
-  function flashStage(color: string, intensity: number) {
-    flashEl.style.background = `radial-gradient(ellipse at center, ${color} 0%, transparent 70%)`;
+  // ---- small utilities ----------------------------------------------------
+
+  function disposeObj(obj: THREE.Object3D) {
+    obj.traverse(o => {
+      const g = (o as unknown as { geometry?: THREE.BufferGeometry }).geometry;
+      if (g) g.dispose();
+      const m = (o as unknown as { material?: THREE.Material | THREE.Material[] }).material;
+      if (Array.isArray(m)) m.forEach(x => x.dispose());
+      else if (m) m.dispose();
+    });
+  }
+
+  function trackMark(obj: THREE.Object3D) {
+    earth.add(obj);
+    marks.push(obj);
+    if (marks.length > MARK_CAP) {
+      const old = marks.shift()!;
+      earth.remove(old);
+      disposeObj(old);
+    }
+  }
+
+  function jitterDir(v: THREE.Vector3, amt: number): THREE.Vector3 {
+    const t = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
+    return v.clone().add(t.multiplyScalar(amt)).normalize();
+  }
+
+  function flashStage(css: string, intensity: number) {
+    flashEl.style.background = `radial-gradient(ellipse at center, ${css} 0%, transparent 70%)`;
     gsap.killTweensOf(flashEl);
     gsap.fromTo(flashEl,
       { opacity: Math.min(0.85, 0.3 + intensity * 0.6) },
@@ -80,33 +117,270 @@ export function initSimScene(config: SimConfig): SimController {
   }
 
   function shakeCamera(intensity: number) {
+    if (cinematic) return;
     const amp = 0.04 + intensity * 0.16;
     gsap.killTweensOf(simCamera.position);
-    const tl = gsap.timeline({
-      onComplete: () => simCamera.position.copy(CAM_HOME),
-    });
+    const tl = gsap.timeline({ onComplete: () => simCamera.position.copy(CAM_HOME) });
     for (let i = 0; i < 5; i++) {
       tl.to(simCamera.position, {
         x: CAM_HOME.x + (Math.random() - 0.5) * amp,
         y: CAM_HOME.y + (Math.random() - 0.5) * amp,
-        duration: 0.05,
-        ease: 'power1.inOut',
+        duration: 0.05, ease: 'power1.inOut',
       });
     }
     tl.to(simCamera.position, { x: CAM_HOME.x, y: CAM_HOME.y, duration: 0.08, ease: 'power2.out' });
   }
 
-  function clearCraters() {
-    craters.forEach(c => {
-      earth.remove(c);
-      c.geometry.dispose();
-      (c.material as THREE.Material).dispose();
+  // ---- visual effect primitives ------------------------------------------
+
+  function sphereBurst(v: THREE.Vector3, color: number, from: number, to: number, fade: number, delay = 0) {
+    const geo = new THREE.SphereGeometry(from, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.copy(v).multiplyScalar(1.41);
+    earth.add(m);
+    gsap.to(m.scale, { x: to/from, y: to/from, z: to/from, duration: fade, ease: 'expo.out', delay });
+    gsap.to(mat, { opacity: 0, duration: fade, ease: 'power2.out', delay, onComplete: () => { earth.remove(m); geo.dispose(); mat.dispose(); } });
+  }
+
+  function shockRing(v: THREE.Vector3, color: number, scaleTo: number, dur: number, delay = 0) {
+    const geo = new THREE.RingGeometry(0.04, 0.085, 48);
+    const mat = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.copy(v).multiplyScalar(1.42);
+    m.lookAt(0, 0, 0); m.rotateY(Math.PI);
+    earth.add(m);
+    gsap.to(m.scale, { x: scaleTo, y: scaleTo, z: 1, duration: dur, ease: 'power2.out', delay });
+    gsap.to(mat, { opacity: 0, duration: dur, ease: 'power2.out', delay, onComplete: () => { earth.remove(m); geo.dispose(); mat.dispose(); } });
+  }
+
+  function debris(v: THREE.Vector3, color: number, count: number, spread: number) {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const u = Math.random(), vv = Math.random();
+      const θ = 2*Math.PI*u, φ = Math.acos(2*vv-1), rr = 0.02 + Math.random()*0.05;
+      pos[i*3] = rr*Math.sin(φ)*Math.cos(θ); pos[i*3+1] = rr*Math.sin(φ)*Math.sin(θ); pos[i*3+2] = rr*Math.cos(φ);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color, size: 0.022, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending });
+    const pts = new THREE.Points(geo, mat);
+    pts.position.copy(v).multiplyScalar(1.41);
+    earth.add(pts);
+    gsap.to(pts.scale, { x: spread, y: spread, z: spread, duration: 1.0, ease: 'expo.out' });
+    gsap.to(mat, { opacity: 0, duration: 1.2, ease: 'power2.out', onComplete: () => { earth.remove(pts); geo.dispose(); mat.dispose(); } });
+  }
+
+  function smokePlume(v: THREE.Vector3, intensity: number) {
+    const geo = new THREE.SphereGeometry(0.05, 12, 12);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x2a2622, transparent: true, opacity: 0.55, depthWrite: false });
+    const m = new THREE.Mesh(geo, mat);
+    earth.add(m);
+    const grow = 5 + intensity * 9;
+    const proxy = { r: 1.42 };
+    gsap.to(m.scale, { x: grow, y: grow, z: grow, duration: 2.6, ease: 'power2.out' });
+    gsap.to(proxy, { r: 1.42 + 0.32 + intensity * 0.18, duration: 2.6, ease: 'power1.out',
+      onUpdate: () => m.position.copy(v).multiplyScalar(proxy.r) });
+    gsap.to(mat, { opacity: 0, duration: 2.6, ease: 'power1.in', onComplete: () => { earth.remove(m); geo.dispose(); mat.dispose(); } });
+  }
+
+  // Persistent charred decal on the planet surface.
+  function scorch(v: THREE.Vector3, size: number, pal: Palette) {
+    const geo = new THREE.CircleGeometry(size, 24);
+    const mat = new THREE.MeshBasicMaterial({ color: pal.scorch, transparent: true, opacity: 0.92, depthWrite: false });
+    const disc = new THREE.Mesh(geo, mat);
+    disc.position.copy(v).multiplyScalar(R_ABOVE);
+    disc.lookAt(0, 0, 0);
+    trackMark(disc);
+
+    // brief glowing ember rim
+    const rGeo = new THREE.RingGeometry(size * 0.7, size, 28);
+    const rMat = new THREE.MeshBasicMaterial({ color: pal.mid, side: THREE.DoubleSide, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const rim = new THREE.Mesh(rGeo, rMat);
+    rim.position.copy(v).multiplyScalar(R_ABOVE + 0.001);
+    rim.lookAt(0, 0, 0);
+    earth.add(rim);
+    gsap.to(rMat, { opacity: 0, duration: 2.2, ease: 'power2.out', onComplete: () => { earth.remove(rim); rGeo.dispose(); rMat.dispose(); } });
+  }
+
+  // ---- the explosion + per-weapon detonations -----------------------------
+
+  interface ExpOpts { big?: boolean; shake?: boolean; playSound?: boolean; smoke?: boolean; }
+
+  function groundExplosion(v: THREE.Vector3, intensity: number, pal: Palette, opts: ExpOpts = {}) {
+    const big = opts.big ?? false;
+    const s = big ? 1.5 : 1;
+
+    sphereBurst(v, pal.core, 0.05, (0.18 + intensity * 0.5) * s, 0.45);          // white-hot core
+    sphereBurst(v, pal.mid,  0.05, (0.30 + intensity * 0.9) * s, 0.9);            // fireball
+    sphereBurst(v, pal.glow, 0.05, (0.40 + intensity * 1.1) * s, 1.5);            // outer glow
+    shockRing(v, pal.glow, 8 + intensity * 22, 1.8);
+    if (big) shockRing(v, pal.glow, 12 + intensity * 26, 2.2, 0.12);
+    debris(v, pal.mid, big ? 64 : 40, 4 + intensity * 9);
+    scorch(v, 0.035 + intensity * 0.07 * s, pal);
+    if (opts.smoke) smokePlume(v, intensity);
+
+    // small persistent crater core
+    const cGeo = new THREE.SphereGeometry(0.018, 8, 8);
+    const cMat = new THREE.MeshBasicMaterial({ color: pal.scorch });
+    const crater = new THREE.Mesh(cGeo, cMat);
+    crater.position.copy(v).multiplyScalar(1.41);
+    trackMark(crater);
+
+    flashStage(pal.glowCss, intensity * (big ? 1.2 : 1));
+    if (opts.shake ?? true) shakeCamera(intensity * (big ? 1.3 : 1));
+    if (opts.playSound ?? true) sound.play('impact', 0.4 + intensity * 1.2);
+  }
+
+  // Incoming kinetic strike: a glowing round arcs down from orbit, then detonates.
+  function projectile(v: THREE.Vector3, color: number, dur: number, onArrive: () => void) {
+    const geo = new THREE.SphereGeometry(0.03, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
+    const p = new THREE.Mesh(geo, mat);
+    earth.add(p);
+
+    const trailGeo = new THREE.BufferGeometry().setFromPoints([v.clone().multiplyScalar(4.6), v.clone().multiplyScalar(4.6)]);
+    const trailMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+    const trail = new THREE.Line(trailGeo, trailMat);
+    earth.add(trail);
+
+    const state = { r: 4.6 };
+    gsap.to(state, { r: 1.42, duration: dur, ease: 'power2.in',
+      onUpdate: () => {
+        p.position.copy(v).multiplyScalar(state.r);
+        const arr = trailGeo.attributes.position.array as Float32Array;
+        const head = v.clone().multiplyScalar(state.r);
+        const tail = v.clone().multiplyScalar(Math.min(4.6, state.r + 0.7));
+        arr[0]=tail.x; arr[1]=tail.y; arr[2]=tail.z; arr[3]=head.x; arr[4]=head.y; arr[5]=head.z;
+        trailGeo.attributes.position.needsUpdate = true;
+      },
+      onComplete: () => {
+        earth.remove(p); geo.dispose(); mat.dispose();
+        gsap.to(trailMat, { opacity: 0, duration: 0.3, onComplete: () => { earth.remove(trail); trailGeo.dispose(); trailMat.dispose(); } });
+        onArrive();
+      },
     });
-    craters.length = 0;
+  }
+
+  // Orbital laser: zoom to a platform above the target that fires a beam column.
+  function orbitalLaser(v: THREE.Vector3, intensity: number) {
+    cinematic = true;
+    rotation.x = earth.rotation.x;   // freeze the auto-spin where it is
+    rotation.y = earth.rotation.y;
+
+    // --- platform (parented to earth so it tracks the surface) ---
+    const station = new THREE.Group();
+    const bodyGeo = new THREE.BoxGeometry(0.16, 0.16, 0.22);
+    const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color: 0x2b332d, metalness: 0.8, roughness: 0.4 }));
+    station.add(body);
+    const ringGeo = new THREE.TorusGeometry(0.2, 0.022, 10, 28);
+    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x7dff8e }));
+    station.add(ring);
+    const panelGeo = new THREE.BoxGeometry(0.5, 0.12, 0.01);
+    const panelMat = new THREE.MeshStandardMaterial({ color: 0x14361b, metalness: 0.6, roughness: 0.5, emissive: 0x0a2a12 });
+    const panel = new THREE.Mesh(panelGeo, panelMat);
+    station.add(panel);
+    const lensGeo = new THREE.SphereGeometry(0.05, 12, 12);
+    const lensMat = new THREE.MeshBasicMaterial({ color: 0xe6fff0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+    const lens = new THREE.Mesh(lensGeo, lensMat);
+    lens.position.set(0, 0, 0.13);        // muzzle faces the planet after lookAt
+    lens.scale.setScalar(0.4);
+    station.add(lens);
+    station.position.copy(v).multiplyScalar(STATION_R);
+    station.lookAt(0, 0, 0);
+    earth.add(station);
+
+    // --- beam column (cylinder along v from platform to surface) ---
+    const beamLen = STATION_R - 1.42;
+    const beamGeo = new THREE.CylinderGeometry(0.02, 0.05, beamLen, 16, 1, true);
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0x7dff8e, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    const glowGeo = new THREE.CylinderGeometry(0.07, 0.12, beamLen, 16, 1, true);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0x7dff8e, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const beamGlow = new THREE.Mesh(glowGeo, glowMat);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone());
+    beam.quaternion.copy(q); beamGlow.quaternion.copy(q);
+    beam.position.copy(v).multiplyScalar((STATION_R + 1.42) / 2);
+    beamGlow.position.copy(beam.position);
+    beam.scale.y = 0.02; beamGlow.scale.y = 0.02;
+    earth.add(beam); earth.add(beamGlow);
+
+    // --- camera framing of the action ---
+    earth.updateWorldMatrix(true, false);
+    const surfaceWorld = earth.localToWorld(v.clone().multiplyScalar(1.42));
+    const stationWorld = earth.localToWorld(v.clone().multiplyScalar(STATION_R));
+    const midWorld = surfaceWorld.clone().lerp(stationWorld, 0.5);
+    const viewDir = simCamera.position.clone().sub(midWorld).normalize();
+    const camTarget = midWorld.clone().add(viewDir.multiplyScalar(2.5));
+
+    const cleanup = () => {
+      earth.remove(station); disposeObj(station);
+      earth.remove(beam); disposeObj(beam);
+      earth.remove(beamGlow); disposeObj(beamGlow);
+      cinematic = false;
+    };
+
+    gsap.killTweensOf(simCamera.position);
+    gsap.killTweensOf(camLook);
+    const tl = gsap.timeline({ onComplete: cleanup });
+
+    // 1) zoom + aim
+    tl.to(simCamera.position, { x: camTarget.x, y: camTarget.y, z: camTarget.z, duration: 0.7, ease: 'power3.inOut' }, 0);
+    tl.to(camLook, { x: midWorld.x, y: midWorld.y, z: midWorld.z, duration: 0.7, ease: 'power3.inOut' }, 0);
+    // 2) charge the lens
+    tl.to(lens.scale, { x: 1.6, y: 1.6, z: 1.6, duration: 0.4, ease: 'power2.in' }, 0.7);
+    tl.to(ring.rotation, { z: Math.PI * 2, duration: 0.5, ease: 'power1.in' }, 0.7);
+    // 3) FIRE
+    tl.add(() => {
+      sound.play('laser', 0.6 + intensity * 0.6);
+      gsap.to([beamMat, glowMat], { opacity: 1, duration: 0.08, ease: 'power2.out' });
+      gsap.to([beam.scale, beamGlow.scale], { y: 1, duration: 0.12, ease: 'back.out(2)' });
+      // groundExplosion handles the surface flash + scorch + shockwave
+      groundExplosion(v, intensity, LASER, { shake: false, playSound: false, big: intensity > 0.7 });
+    }, 1.15);
+    // 4) sustain flicker then cut the beam
+    tl.to([beamMat], { opacity: 0.6, duration: 0.08, yoyo: true, repeat: 5 }, 1.25);
+    tl.to([beamMat, glowMat], { opacity: 0, duration: 0.4, ease: 'power2.in' }, 1.95);
+    // 5) pull back to the home shot
+    tl.to(simCamera.position, { x: CAM_HOME.x, y: CAM_HOME.y, z: CAM_HOME.z, duration: 0.85, ease: 'power3.inOut' }, 2.2);
+    tl.to(camLook, { x: 0, y: 0, z: 0, duration: 0.85, ease: 'power3.inOut' }, 2.2);
+  }
+
+  function detonate(v: THREE.Vector3, cat: string, intensity: number) {
+    switch (cat) {
+      case 'lasers':
+        orbitalLaser(v, intensity);
+        break;
+      case 'nukes':
+        groundExplosion(v, intensity, EXPLOSION, { big: true, smoke: true });
+        break;
+      case 'missiles':
+        projectile(v, 0xffae6b, 0.55, () => groundExplosion(v, intensity, EXPLOSION, { big: intensity > 0.6, smoke: intensity > 0.6 }));
+        break;
+      case 'drones': {
+        const n = 4;
+        for (let k = 0; k < n; k++) {
+          const jv = jitterDir(v, 0.12);
+          setTimeout(() => projectile(jv, 0xff5a3c, 0.4,
+            () => groundExplosion(jv, intensity * 0.55, EXPLOSION, { shake: k === 0, playSound: k === 0 })
+          ), k * 130);
+        }
+        break;
+      }
+      default: // grenades + anything else: a compact blast
+        groundExplosion(v, intensity, EXPLOSION, {});
+    }
+  }
+
+  // ---- cleanup / reset ----------------------------------------------------
+
+  function clearMarks() {
+    marks.forEach(m => { earth.remove(m); disposeObj(m); });
+    marks.length = 0;
   }
 
   function reset() {
-    clearCraters();
+    clearMarks();
     analytics.casualties = 0;
     analytics.radius = 0;
     analytics.cost = 0;
@@ -127,6 +401,7 @@ export function initSimScene(config: SimConfig): SimController {
   }
 
   function deployAt(e: PointerEvent) {
+    if (cinematic) return;
     const rect = canvasEl.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -150,87 +425,8 @@ export function initSimScene(config: SimConfig): SimController {
     if (!w) return;
     const intensity = w.stats.YIELD;
     const isLaser = w.cat === 'lasers';
-    const color = isLaser ? 0x7dff8e : 0xdc2626;
 
-    // Core fireball
-    const exGeo = new THREE.SphereGeometry(0.04, 16, 16);
-    const exMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
-    const ex = new THREE.Mesh(exGeo, exMat);
-    ex.position.copy(v).multiplyScalar(1.41);
-    earth.add(ex);
-    gsap.to(ex.scale, { x: 6+intensity*16, y: 6+intensity*16, z: 6+intensity*16, duration: 0.9, ease: 'expo.out' });
-    gsap.to(exMat, { opacity: 0, duration: 1.6, ease: 'power2.out', onComplete: () => { earth.remove(ex); exGeo.dispose(); exMat.dispose(); } });
-
-    // Hot white flash core for high-yield strikes
-    if (!isLaser && intensity > 0.45) {
-      const coreGeo = new THREE.SphereGeometry(0.05, 16, 16);
-      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      core.position.copy(v).multiplyScalar(1.41);
-      earth.add(core);
-      gsap.to(core.scale, { x: 4+intensity*10, y: 4+intensity*10, z: 4+intensity*10, duration: 0.35, ease: 'expo.out' });
-      gsap.to(coreMat, { opacity: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { earth.remove(core); coreGeo.dispose(); coreMat.dispose(); } });
-    }
-
-    // Expanding shockwave ring
-    const rGeo = new THREE.RingGeometry(0.04, 0.08, 48);
-    const rMat = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
-    const rMesh = new THREE.Mesh(rGeo, rMat);
-    rMesh.position.copy(v).multiplyScalar(1.42);
-    rMesh.lookAt(0, 0, 0); rMesh.rotateY(Math.PI);
-    earth.add(rMesh);
-    gsap.to(rMesh.scale, { x: 8+intensity*22, y: 8+intensity*22, z: 1, duration: 1.8, ease: 'power2.out' });
-    gsap.to(rMat, { opacity: 0, duration: 1.8, ease: 'power2.out', onComplete: () => { earth.remove(rMesh); rGeo.dispose(); rMat.dispose(); } });
-
-    // Debris / spark burst — points scattered outward from the impact
-    const sparkN = 44;
-    const sgeoB = new THREE.BufferGeometry();
-    const sposB = new Float32Array(sparkN * 3);
-    for (let i = 0; i < sparkN; i++) {
-      const u = Math.random(), vv = Math.random();
-      const θ2 = 2*Math.PI*u, φ2 = Math.acos(2*vv-1), rr = 0.02 + Math.random()*0.05;
-      sposB[i*3]   = rr*Math.sin(φ2)*Math.cos(θ2);
-      sposB[i*3+1] = rr*Math.sin(φ2)*Math.sin(θ2);
-      sposB[i*3+2] = rr*Math.cos(φ2);
-    }
-    sgeoB.setAttribute('position', new THREE.BufferAttribute(sposB, 3));
-    const smatB = new THREE.PointsMaterial({ color, size: 0.02, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending });
-    const sparks = new THREE.Points(sgeoB, smatB);
-    sparks.position.copy(v).multiplyScalar(1.41);
-    earth.add(sparks);
-    gsap.to(sparks.scale, { x: 4+intensity*9, y: 4+intensity*9, z: 4+intensity*9, duration: 1.0, ease: 'expo.out' });
-    gsap.to(smatB, { opacity: 0, duration: 1.2, ease: 'power2.out', onComplete: () => { earth.remove(sparks); sgeoB.dispose(); smatB.dispose(); } });
-
-    // Persistent crater (capped + tracked for reset)
-    const cGeo = new THREE.SphereGeometry(0.018, 8, 8);
-    const cMat = new THREE.MeshBasicMaterial({ color });
-    const crater = new THREE.Mesh(cGeo, cMat);
-    crater.position.copy(v).multiplyScalar(1.41);
-    earth.add(crater);
-    craters.push(crater);
-    if (craters.length > CRATER_CAP) {
-      const old = craters.shift()!;
-      earth.remove(old);
-      old.geometry.dispose();
-      (old.material as THREE.Material).dispose();
-    }
-
-    if (isLaser) {
-      const beamPts = [
-        new THREE.Vector3().copy(v).multiplyScalar(4.5),
-        new THREE.Vector3().copy(v).multiplyScalar(1.4)
-      ];
-      const beamGeo = new THREE.BufferGeometry().setFromPoints(beamPts);
-      const beamMat = new THREE.LineBasicMaterial({ color: 0x7dff8e, transparent: true, opacity: 1 });
-      const beam = new THREE.Line(beamGeo, beamMat);
-      earth.add(beam);
-      gsap.to(beamMat, { opacity: 0, duration: 1.2, ease: 'power2.out', onComplete: () => { earth.remove(beam); beamGeo.dispose(); beamMat.dispose(); } });
-    }
-
-    // Feedback: sound, stage flash, camera shake
-    sound.play(isLaser ? 'laser' : 'impact', 0.4 + intensity * 1.2);
-    flashStage(isLaser ? 'rgba(125,255,142,0.5)' : 'rgba(220,38,38,0.55)', intensity);
-    shakeCamera(intensity);
+    detonate(v, w.cat, intensity);
 
     const density = (region === 'INTL. WATERS' || region === 'ARCTIC SHELF' || region === 'ANTARCTIC') ? 5
                   : region === 'OCEANIA' ? 80 : 320;
@@ -252,12 +448,13 @@ export function initSimScene(config: SimConfig): SimController {
   }
 
   canvasEl.addEventListener('pointerdown', (e) => {
+    if (cinematic) return;
     isDragging = false;
     lastMouse = { x: e.clientX, y: e.clientY };
     canvasEl.setPointerCapture(e.pointerId);
   });
   canvasEl.addEventListener('pointermove', (e) => {
-    if (!lastMouse) return;
+    if (!lastMouse || cinematic) return;
     const dx = e.clientX - lastMouse.x, dy = e.clientY - lastMouse.y;
     if (Math.hypot(dx, dy) > 4) {
       isDragging = true;
@@ -277,7 +474,8 @@ export function initSimScene(config: SimConfig): SimController {
     animId = requestAnimationFrame(animateSim);
     earth.rotation.x += (rotation.x - earth.rotation.x) * 0.15;
     earth.rotation.y += (rotation.y - earth.rotation.y) * 0.15;
-    if (!isDragging) rotation.y += 0.0015;
+    if (!isDragging && !cinematic) rotation.y += 0.0015;
+    simCamera.lookAt(camLook);
     renderer.render(simScene, simCamera);
   }
   animateSim();
@@ -286,7 +484,8 @@ export function initSimScene(config: SimConfig): SimController {
   function dispose() {
     cancelAnimationFrame(animId);
     gsap.killTweensOf(simCamera.position);
-    clearCraters();
+    gsap.killTweensOf(camLook);
+    clearMarks();
     renderer.dispose();
     if (canvasEl.parentElement) canvasEl.parentElement.removeChild(canvasEl);
     if (flashEl.parentElement) flashEl.parentElement.removeChild(flashEl);

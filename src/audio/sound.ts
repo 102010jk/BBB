@@ -50,6 +50,16 @@ class SoundEngine {
   private _muted = false;
   private booted = false;
 
+  // Optional real samples (CC/royalty-free). When a cue has a loaded buffer it
+  // is used instead of the synthesized version; otherwise we fall back to synth.
+  private samples: Partial<Record<Cue, AudioBuffer>> = {};
+  private sampleFiles: Partial<Record<Cue, string>> = {
+    impact: 'impact.mp3',
+    laser: 'laser.mp3',
+    nav: 'nav.mp3',
+  };
+  private samplesRequested = false;
+
   constructor() {
     try {
       this._muted = localStorage.getItem(STORAGE_KEY) === '1';
@@ -138,6 +148,28 @@ class SoundEngine {
 
     // shared noise
     this.noiseBuffer = this.makeNoise(2);
+
+    this.loadSamples();
+  }
+
+  private loadSamples(): void {
+    if (this.samplesRequested || !this.ctx) return;
+    this.samplesRequested = true;
+    if (typeof fetch !== 'function') return;
+    const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+    for (const key of Object.keys(this.sampleFiles) as Cue[]) {
+      const file = this.sampleFiles[key];
+      if (!file) continue;
+      try {
+        fetch(`${base}sounds/${file}`)
+          .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('404'))))
+          .then(buf => this.ctx!.decodeAudioData(buf))
+          .then(audio => { this.samples[key] = audio; })
+          .catch(() => { /* keep the synthesized fallback */ });
+      } catch {
+        /* fetch unavailable / bad URL — synthesized fallback stays */
+      }
+    }
   }
 
   private makeNoise(seconds: number): AudioBuffer {
@@ -271,10 +303,51 @@ class SoundEngine {
 
   // ---- public cues --------------------------------------------------------
 
+  /** Play a loaded sample with a length cap + fade, scaled by intensity. */
+  private playSample(cue: Cue, intensity: number): void {
+    const ctx = this.ctx!;
+    const buf = this.samples[cue]!;
+    const t0 = this.now();
+    let gain = 0.7, rate = 1, maxDur = buf.duration, send = 0.15;
+
+    if (cue === 'impact') {
+      const k = Math.max(0.25, Math.min(1.6, intensity));
+      rate = 1.18 - k * 0.4;            // bigger yield → deeper/slower
+      gain = 0.55 + k * 0.55;
+      maxDur = 1.2 + k * 1.6;
+      send = 0.3;
+    } else if (cue === 'laser') {
+      rate = 1.0; gain = 0.6; maxDur = 1.7; send = 0.22;
+    } else if (cue === 'nav') {
+      rate = 1.05; gain = 0.5; maxDur = 1.1; send = 0.12;
+    }
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+
+    const dur = Math.min(buf.duration / rate, maxDur);
+    const atk = 0.005;
+    const rel = Math.min(0.3, dur * 0.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + atk);
+    g.gain.setValueAtTime(gain, t0 + Math.max(atk, dur - rel));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+    src.connect(g);
+    this.route(g, t0, undefined, send);
+    src.start(t0);
+    src.stop(t0 + dur + 0.05);
+  }
+
   play(cue: Cue, intensity = 1): void {
     if (this._muted) return;
     this.ensure();
     if (!this.ctx || this.ctx.state !== 'running') return;
+
+    if (this.samples[cue]) { this.playSample(cue, intensity); return; }
+
     const t = this.now();
 
     switch (cue) {

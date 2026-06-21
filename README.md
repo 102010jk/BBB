@@ -41,11 +41,23 @@ Then open the printed local URL.
 
 ## Sound
 
-All cues are synthesized at runtime from oscillators and shaped noise, tuned to
-an A-minor-pentatonic palette and glued together with a small generated reverb,
-so multi-note cues stay consonant rather than sounding random. Audio only starts
-after the first user interaction (browser autoplay policy) and can be muted from
-the HUD. See `src/audio/sound.ts`.
+Hybrid engine (`src/audio/sound.ts`). UI cues are synthesized at runtime from
+oscillators and shaped noise, tuned to an A-minor-pentatonic palette and glued
+together with a small generated reverb, so they stay consonant rather than
+sounding random. A few impactful cues (`impact`, `laser`, `nav`) use real
+royalty-free samples from `public/sounds/`; if a file is missing the engine
+falls back to the synthesized version. Drop your own `public/sounds/<cue>.mp3`
+to override any cue. Audio only starts after the first user interaction (browser
+autoplay policy) and can be muted from the HUD.
+
+## Simulator effects
+
+Each weapon category detonates differently: nukes throw a big fireball, white
+core, twin shockwaves, debris and a rising smoke plume; missiles/drones arc in
+as guided projectiles before impact; and **orbital lasers play a short
+cinematic** — the camera zooms to an orbital platform above the target that
+fires a beam column. Every strike leaves a persistent scorch decal on the
+planet; **RESET** clears them.
 
 ## Accessibility & performance
 
