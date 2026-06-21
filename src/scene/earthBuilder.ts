@@ -73,7 +73,7 @@ export function buildEarth(radius: number): EarthGroup {
       pts.push(new THREE.Vector3(
         Math.cos(lat) * Math.cos(lon) * radius * 1.004,
         Math.sin(lat) * radius * 1.004,
-        Math.cos(lat) * Math.sin(lon) * radius * 1.004
+        -Math.cos(lat) * Math.sin(lon) * radius * 1.004
       ));
     }
     const g = new THREE.BufferGeometry().setFromPoints(pts);
@@ -88,7 +88,7 @@ export function buildEarth(radius: number): EarthGroup {
       pts.push(new THREE.Vector3(
         Math.cos(lat) * Math.cos(lon) * radius * 1.004,
         Math.sin(lat) * radius * 1.004,
-        Math.cos(lat) * Math.sin(lon) * radius * 1.004
+        -Math.cos(lat) * Math.sin(lon) * radius * 1.004
       ));
     }
     const g = new THREE.BufferGeometry().setFromPoints(pts);
@@ -96,6 +96,8 @@ export function buildEarth(radius: number): EarthGroup {
     group.add(new THREE.Line(g, m));
   }
 
+  // Real (lat, lon) → position. The -sin(lon) on Z aligns these dots with the
+  // equirectangular earth texture (Greenwich at the seam centre, east = +lon).
   const CITIES: [number, number][] = [
     [40.7,-74.0],[51.5,-0.1],[35.7,139.7],[55.7,37.6],[39.9,116.4],[28.6,77.2],
     [-23.5,-46.6],[1.3,103.8],[-33.9,18.4],[48.8,2.3],[19.4,-99.1],[-34.6,-58.4],
@@ -106,9 +108,9 @@ export function buildEarth(radius: number): EarthGroup {
   const cityPos = new Float32Array(CITIES.length * 3);
   CITIES.forEach((c, idx) => {
     const lat = c[0] * Math.PI / 180, lon = c[1] * Math.PI / 180;
-    cityPos[idx * 3]     = Math.cos(lat) * Math.cos(lon) * radius * 1.012;
-    cityPos[idx * 3 + 1] = Math.sin(lat) * radius * 1.012;
-    cityPos[idx * 3 + 2] = Math.cos(lat) * Math.sin(lon) * radius * 1.012;
+    cityPos[idx * 3]     =  Math.cos(lat) * Math.cos(lon) * radius * 1.012;
+    cityPos[idx * 3 + 1] =  Math.sin(lat) * radius * 1.012;
+    cityPos[idx * 3 + 2] = -Math.cos(lat) * Math.sin(lon) * radius * 1.012;
   });
   cityGeo.setAttribute('position', new THREE.BufferAttribute(cityPos, 3));
   const cityMat = new THREE.PointsMaterial({ color: 0x7dff8e, size: 0.035, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending });

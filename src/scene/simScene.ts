@@ -141,7 +141,8 @@ export function initSimScene(config: SimConfig): SimController {
     const localP = earth.worldToLocal(hits[0].point.clone());
     const v = localP.clone().normalize();
     const lat = Math.asin(v.y) * 180 / Math.PI;
-    const lon = Math.atan2(v.z, v.x) * 180 / Math.PI;
+    // -v.z matches the earth texture's longitude convention (east = +lon).
+    const lon = Math.atan2(-v.z, v.x) * 180 / Math.PI;
     const region = regionFor(lat, lon);
     onTargetCoords(`${lat.toFixed(1)}°, ${lon.toFixed(1)}° · ${region}`);
 

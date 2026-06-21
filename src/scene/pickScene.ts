@@ -67,7 +67,8 @@ export function initPickScene(
     const localP = earth.worldToLocal(hits[0].point.clone());
     const v = localP.clone().normalize();
     const lat =  Math.asin(v.y) * 180 / Math.PI;
-    const lon =  Math.atan2(v.z, v.x) * 180 / Math.PI;
+    // -v.z matches the earth texture's longitude convention (east = +lon).
+    const lon =  Math.atan2(-v.z, v.x) * 180 / Math.PI;
 
     if (marker) earth.remove(marker);
     const mGeo = new THREE.SphereGeometry(0.035, 12, 12);
