@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { buildEarth, addEarthLights, EarthGroup } from './earthBuilder';
 import { SimAnalytics } from '../types';
 import { weaponById } from '../data';
@@ -53,6 +54,26 @@ export function initSimScene(config: SimConfig): SimController {
   const earth: EarthGroup = buildEarth(R_SURFACE);
   simScene.add(earth);
   addEarthLights(simScene);
+
+  // Optional downloaded orbital-platform model. Drop any GLB at
+  // public/models/station.glb and it replaces the built-in station. We verify
+  // it is really a GLB first (dev servers answer missing files with index.html),
+  // so the procedural fallback stays quiet when no model is present.
+  let stationModel: THREE.Object3D | null = null;
+  if (typeof fetch === 'function') {
+    const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+    fetch(`${base}models/station.glb`)
+      .then(r => {
+        const ct = r.headers.get('content-type') || '';
+        if (!r.ok || ct.includes('text/html')) throw new Error('no model');
+        return r.arrayBuffer();
+      })
+      .then(buf => {
+        if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== 'glTF') throw new Error('not glb');
+        new GLTFLoader().parse(buf, '', g => { stationModel = g.scene; }, () => { /* parse failed */ });
+      })
+      .catch(() => { /* no/invalid model — the procedural station is used */ });
+  }
 
   const sgeo = new THREE.BufferGeometry();
   const pcount = 800;
@@ -262,6 +283,85 @@ export function initSimScene(config: SimConfig): SimController {
     });
   }
 
+  // Orbital platform — a downloaded GLB if present, else a built model.
+  function buildStation(): { group: THREE.Group; lens: THREE.Mesh; ring: THREE.Mesh | null; fromModel: boolean } {
+    const group = new THREE.Group();
+    let ring: THREE.Mesh | null = null;
+    const fromModel = !!stationModel;
+
+    if (stationModel) {
+      const m = stationModel.clone(true);
+      const box = new THREE.Box3().setFromObject(m);
+      const size = box.getSize(new THREE.Vector3()).length() || 1;
+      m.scale.setScalar(0.6 / size);                 // normalise to a consistent size
+      box.setFromObject(m);
+      m.position.sub(box.getCenter(new THREE.Vector3()).multiplyScalar(1)); // recentre
+      group.add(m);
+    } else {
+      // central hull
+      const hull = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.07, 0.28, 16),
+        new THREE.MeshStandardMaterial({ color: 0x3a423c, metalness: 0.85, roughness: 0.35 }),
+      );
+      hull.rotation.x = Math.PI / 2;                  // align hull axis with +Z (toward planet)
+      group.add(hull);
+      // bow cap
+      const nose = new THREE.Mesh(
+        new THREE.ConeGeometry(0.07, 0.1, 16),
+        new THREE.MeshStandardMaterial({ color: 0x4a534c, metalness: 0.8, roughness: 0.4 }),
+      );
+      nose.rotation.x = -Math.PI / 2; nose.position.z = 0.19;
+      group.add(nose);
+      // rotating collar
+      ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.13, 0.02, 10, 28),
+        new THREE.MeshBasicMaterial({ color: 0x7dff8e }),
+      );
+      group.add(ring);
+      // truss + twin solar arrays
+      const truss = new THREE.Mesh(
+        new THREE.BoxGeometry(0.62, 0.012, 0.012),
+        new THREE.MeshStandardMaterial({ color: 0x6a6a6a, metalness: 0.7, roughness: 0.5 }),
+      );
+      group.add(truss);
+      const panelMat = new THREE.MeshStandardMaterial({ color: 0x16324a, metalness: 0.4, roughness: 0.5, emissive: 0x0a1c30, emissiveIntensity: 0.6 });
+      for (const sx of [-1, 1]) {
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.006), panelMat);
+        panel.position.x = sx * 0.27;
+        group.add(panel);
+      }
+      // comms dish
+      const dish = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0xcfd6d0, metalness: 0.5, roughness: 0.4, side: THREE.DoubleSide }),
+      );
+      dish.rotation.x = Math.PI; dish.position.set(0, 0.12, -0.04);
+      group.add(dish);
+      // antenna + nav lights
+      const ant = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.004, 0.004, 0.18, 6),
+        new THREE.MeshBasicMaterial({ color: 0x9aa39c }),
+      );
+      ant.position.set(0, -0.13, -0.02);
+      group.add(ant);
+      const navR = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 8), new THREE.MeshBasicMaterial({ color: 0xdc2626 }));
+      navR.position.set(0.3, 0, 0); group.add(navR);
+      const navG = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 8), new THREE.MeshBasicMaterial({ color: 0x7dff8e }));
+      navG.position.set(-0.3, 0, 0); group.add(navG);
+    }
+
+    // universal muzzle lens (charges before firing); faces planet after lookAt
+    const lens = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0xe6fff0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }),
+    );
+    lens.position.set(0, 0, 0.17);
+    lens.scale.setScalar(0.4);
+    group.add(lens);
+
+    return { group, lens, ring, fromModel };
+  }
+
   // Orbital laser: zoom to a platform above the target that fires a beam column.
   function orbitalLaser(v: THREE.Vector3, intensity: number) {
     cinematic = true;
@@ -269,23 +369,7 @@ export function initSimScene(config: SimConfig): SimController {
     rotation.y = earth.rotation.y;
 
     // --- platform (parented to earth so it tracks the surface) ---
-    const station = new THREE.Group();
-    const bodyGeo = new THREE.BoxGeometry(0.16, 0.16, 0.22);
-    const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color: 0x2b332d, metalness: 0.8, roughness: 0.4 }));
-    station.add(body);
-    const ringGeo = new THREE.TorusGeometry(0.2, 0.022, 10, 28);
-    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x7dff8e }));
-    station.add(ring);
-    const panelGeo = new THREE.BoxGeometry(0.5, 0.12, 0.01);
-    const panelMat = new THREE.MeshStandardMaterial({ color: 0x14361b, metalness: 0.6, roughness: 0.5, emissive: 0x0a2a12 });
-    const panel = new THREE.Mesh(panelGeo, panelMat);
-    station.add(panel);
-    const lensGeo = new THREE.SphereGeometry(0.05, 12, 12);
-    const lensMat = new THREE.MeshBasicMaterial({ color: 0xe6fff0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
-    const lens = new THREE.Mesh(lensGeo, lensMat);
-    lens.position.set(0, 0, 0.13);        // muzzle faces the planet after lookAt
-    lens.scale.setScalar(0.4);
-    station.add(lens);
+    const { group: station, lens, ring, fromModel } = buildStation();
     station.position.copy(v).multiplyScalar(STATION_R);
     station.lookAt(0, 0, 0);
     earth.add(station);
@@ -314,7 +398,11 @@ export function initSimScene(config: SimConfig): SimController {
     const camTarget = midWorld.clone().add(viewDir.multiplyScalar(2.5));
 
     const cleanup = () => {
-      earth.remove(station); disposeObj(station);
+      earth.remove(station);
+      // a cloned GLB shares geometry/materials with the cached template — only
+      // dispose the procedurally-built station's own resources.
+      if (!fromModel) disposeObj(station);
+      else { const l = lens; l.geometry.dispose(); (l.material as THREE.Material).dispose(); }
       earth.remove(beam); disposeObj(beam);
       earth.remove(beamGlow); disposeObj(beamGlow);
       cinematic = false;
@@ -329,7 +417,7 @@ export function initSimScene(config: SimConfig): SimController {
     tl.to(camLook, { x: midWorld.x, y: midWorld.y, z: midWorld.z, duration: 0.7, ease: 'power3.inOut' }, 0);
     // 2) charge the lens
     tl.to(lens.scale, { x: 1.6, y: 1.6, z: 1.6, duration: 0.4, ease: 'power2.in' }, 0.7);
-    tl.to(ring.rotation, { z: Math.PI * 2, duration: 0.5, ease: 'power1.in' }, 0.7);
+    if (ring) tl.to(ring.rotation, { z: Math.PI * 2, duration: 0.5, ease: 'power1.in' }, 0.7);
     // 3) FIRE
     tl.add(() => {
       sound.play('laser', 0.6 + intensity * 0.6);

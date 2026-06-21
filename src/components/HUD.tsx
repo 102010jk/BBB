@@ -115,6 +115,7 @@ export default function HUD({ route, flashRef, domMenuRef, fpsRef, toast }: HUDP
       <div className={`tagline${route === 'landing' ? ' on' : ''}`}>
         <div className="b">Big <em>Boys</em> Bombs</div>
         <div className="s">DEFENSE LOGISTICS · ORBITAL DELIVERY · EST. 2079</div>
+        <div className="disclaimer">FICTION · SATIRE · NOTHING HERE IS REAL OR FOR SALE</div>
       </div>
 
       {/* Corner footer */}

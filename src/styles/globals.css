@@ -147,6 +147,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .tagline .b{font-family:var(--sans);font-weight:300;font-size:48px;letter-spacing:.04em;color:#fff;line-height:1;margin:0}
 .tagline .b em{font-style:italic;color:var(--red);font-weight:400}
 .tagline .s{font-size:10px;letter-spacing:.4em;color:var(--dim);margin-top:14px}
+.tagline .disclaimer{font-size:9px;letter-spacing:.34em;color:var(--dimmer);margin-top:10px}
 
 /* ---------- Page chrome ---------- */
 .page{position:fixed;inset:0;pointer-events:none;z-index:12;opacity:0;transition:opacity .4s ease}
@@ -404,6 +405,24 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .info .msg .t em{font-style:italic;color:var(--red);font-weight:400}
 .info .msg .s{margin-top:14px;font-size:10.5px;letter-spacing:.36em;color:var(--dim);max-width:46ch}
 
+/* dossier: fictional "about" + satire disclaimer */
+.info .dossier{display:grid;grid-template-columns:1.25fr 1fr;max-width:1040px;width:100%;text-align:left;}
+.info .dossier .col{padding:34px 40px;}
+.info .dossier .about{border-right:1px solid var(--line-2);}
+.info .dossier h3{font-family:var(--mono);font-weight:500;font-size:10.5px;letter-spacing:.32em;color:var(--green);margin:0 0 20px;}
+.info .dossier .lore{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;}
+.info .dossier .lore li{position:relative;padding-left:22px;font-size:13px;line-height:1.5;color:#cfcfcf;letter-spacing:.01em;}
+.info .dossier .lore li::before{content:"\25B8";position:absolute;left:0;color:var(--green);}
+.info .dossier .lore b{color:#fff;font-weight:600;}
+.info .dossier .record{margin-top:26px;border-top:1px solid var(--line-2);padding-top:18px;}
+.info .dossier .record .k{font-size:10px;letter-spacing:.3em;color:var(--green);}
+.info .dossier .record p{margin:10px 0 0;font-size:12px;line-height:1.65;color:var(--dim);letter-spacing:.01em;}
+.info .dossier .record b{color:#fff;}
+.info .dossier .disc{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:24px;background:rgba(20,8,8,.22);}
+.info .dossier .disc .seal{width:120px;height:120px;font-size:12px;}
+.info .dossier .disc .msg .t{font-size:30px;}
+.info .dossier .disc .msg .s{margin-top:12px;letter-spacing:.14em;line-height:1.7;max-width:42ch;font-size:10.5px;}
+
 /* ---------- Tweaks panel ---------- */
 .tweaks{position:fixed;bottom:80px;right:22px;z-index:30;width:300px;background:rgba(0,0,0,.94);border:1px solid var(--line-2);color:#fff;font-family:var(--mono);font-size:11.5px;display:none;pointer-events:auto;box-shadow:0 0 0 1px #000, 0 12px 40px rgba(0,0,0,.6)}
 .tweaks.on{display:block}
@@ -497,6 +516,9 @@ body:not([data-state="landing"]) #dom-menu{opacity:0;pointer-events:none}
     display:flex;flex-direction:column;overflow-y:auto}
   .sim .picker,.sim .analytics{border:none;border-top:1px solid var(--line-2)}
   .sim .stage{min-height:46vh;order:-1}
+  .info{inset:178px 16px 16px;overflow-y:auto}
+  .info .dossier{grid-template-columns:1fr}
+  .info .dossier .about{border-right:none;border-bottom:1px solid var(--line-2)}
 }
 @media (max-width: 560px){
   .topbar .r span:nth-child(1),.topbar .r span:nth-child(2){display:none}
