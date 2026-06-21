@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    image: bbb-spa
+    container_name: bbb
+    ports:
+      - "8222:8222"
+    restart: unless-stopped

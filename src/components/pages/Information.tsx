@@ -17,11 +17,10 @@ export default function Information() {
           <div className="col about">
             <h3>// WHO WE ARE</h3>
             <ul className="lore">
-              <li><b>TOP-1</b> supplier of orbital ordnance logistics across the Sol Combine</li>
-              <li>Operating since <b>2061</b> — nine autonomous fabrication yards in the Belt</li>
-              <li>No-bias procurement: every accredited faction, one price sheet</li>
-              <li>Hand-forged warheads from certified Tier-Ω foundries</li>
-              <li>Privacy first — end-to-end, <b>AES-512</b>, zero manifest retention</li>
+              <li><b>TOP-1</b> supplier of weapons of mass destruction, worldwide</li>
+              <li>Forged to <b>German quality</b> standards — precision-machined, over-tested</li>
+              <li>No bias toward customers — every client, one price sheet</li>
+              <li>We protect your privacy — end-to-end, <b>AES-512</b>, zero manifest retention</li>
             </ul>
             <div className="record">
               <span className="k">// CAREER HIGH</span>

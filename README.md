@@ -28,6 +28,24 @@ npm run preview  # preview the production build
 
 Then open the printed local URL.
 
+## Docker
+
+Build and serve the production bundle in a container (nginx) on **port 8222**:
+
+```bash
+# with docker compose
+docker compose up --build
+# → http://localhost:8222
+
+# or with plain docker
+docker build -t bbb-spa .
+docker run --rm -p 8222:8222 bbb-spa
+```
+
+The image is multi-stage: a Node stage runs `npm ci && npm run build`, then the
+static `dist/` is served by nginx (`nginx.conf`, SPA fallback, hashed-asset
+caching) listening on 8222.
+
 ## Controls
 
 - **Click a menu label** on the landing scene to enter a section
