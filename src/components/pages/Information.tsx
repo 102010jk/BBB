@@ -22,10 +22,6 @@ export default function Information() {
               <li>No bias toward customers — every client, one price sheet</li>
               <li>We protect your privacy — end-to-end, <b>AES-512</b>, zero manifest retention</li>
             </ul>
-            <div className="record">
-              <span className="k">// CAREER HIGH</span>
-              <p>First major contract, <b>2063</b> — the Halcyon Accord. Netted <b>₡271M</b> over four orbital cycles and put BBB on every registry in the system.</p>
-            </div>
           </div>
           <div className="col disc">
             <div className="seal">FICTION</div>
