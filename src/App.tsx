@@ -6,6 +6,7 @@ import { sound } from './audio/sound';
 
 import HUD from './components/HUD';
 import Compass from './components/Compass';
+import MobileMenu from './components/MobileMenu';
 import TweaksPanel from './components/TweaksPanel';
 import Splash from './components/Splash';
 import Arsenal from './components/pages/Arsenal';
@@ -160,6 +161,7 @@ export default function App() {
       />
 
       <Compass route={route} onNavigate={handleNavigate} />
+      <MobileMenu route={route} onNavigate={handleNavigate} />
 
       {/* ARSENAL */}
       <div className={`page${route==='arsenal'?' on':''}`} id="page-arsenal">

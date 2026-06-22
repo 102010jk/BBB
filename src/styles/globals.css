@@ -17,8 +17,9 @@
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#0b0b0b;color:#fff;font-family:var(--mono);font-size:12px;overflow:hidden;height:100%;width:100%}
-body{position:fixed;inset:0;background-color:rgb(11,11,11)}
-#root{position:fixed;inset:0;width:100%;height:100%}
+body{position:fixed;inset:0;height:100dvh;background-color:rgb(11,11,11);-webkit-text-size-adjust:100%;text-size-adjust:100%}
+#root{position:fixed;inset:0;width:100%;height:100%;height:100dvh}
+#scene{display:block;position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 ::selection{background:var(--green);color:#000}
 button{font-family:var(--mono);color:#fff}
@@ -38,7 +39,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .brackets .bl{bottom:0;left:0;border-bottom:1px solid;border-left:1px solid}
 .brackets .br{bottom:0;right:0;border-bottom:1px solid;border-right:1px solid}
 
-.topbar{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:12px 22px;font-size:11px;letter-spacing:.18em;z-index:11;background:linear-gradient(to bottom, rgba(0,0,0,.75), transparent)}
+.topbar{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:12px 22px;padding-top:max(12px,env(safe-area-inset-top));padding-left:max(22px,env(safe-area-inset-left));padding-right:max(22px,env(safe-area-inset-right));font-size:11px;letter-spacing:.18em;z-index:11;background:linear-gradient(to bottom, rgba(0,0,0,.75), transparent)}
 .topbar .l{display:flex;gap:16px;align-items:center;color:var(--green)}
 .topbar .l .sep{color:var(--dimmer)}
 .topbar .l .label{color:var(--dim);letter-spacing:.22em}
@@ -72,6 +73,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 
 /* ---------- Compass ---------- */
 .compass{
+  --compass-gap:200px;
   position:fixed;top:42px;left:50%;transform:translateX(-50%);
   z-index:14;pointer-events:auto;
   width:min(720px, 84vw);height:48px;
@@ -106,7 +108,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
   will-change:transform;
 }
 .compass .item{
-  width:200px;flex-shrink:0;text-align:center;
+  width:var(--compass-gap,200px);flex-shrink:0;text-align:center;
   font-family:var(--mono);font-weight:500;font-size:10.5px;letter-spacing:.32em;
   color:var(--dimmer);text-transform:uppercase;
   padding:6px 0;cursor:pointer;
@@ -136,6 +138,29 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .menu-label::after{bottom:-1px;right:-1px;border-bottom:1px solid;border-right:1px solid}
 .menu-label:hover{color:#d6ffdb;letter-spacing:.44em;text-shadow:0 0 18px var(--green), 0 0 6px rgba(0,0,0,.95)}
 .menu-label:hover::before, .menu-label:hover::after{opacity:1}
+
+/* ---------- Mobile landing menu (touch) ---------- */
+/* Hidden on desktop; the orbiting 3D labels are used there instead. */
+.mobile-menu{
+  display:none;
+  position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);
+  z-index:13;flex-direction:column;gap:12px;width:min(380px,84vw);
+  pointer-events:none;opacity:0;transition:opacity .4s ease;
+}
+.mobile-menu.on{opacity:1;pointer-events:auto}
+.mobile-menu .mm-item{
+  display:flex;align-items:center;gap:14px;width:100%;
+  background:rgba(10,12,12,.55);
+  border:1px solid rgba(125,255,142,.22);
+  -webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);
+  color:var(--green);font-family:var(--mono);font-weight:600;
+  font-size:14px;letter-spacing:.30em;text-transform:uppercase;text-align:left;
+  padding:18px 22px;cursor:pointer;
+  box-shadow:0 0 0 1px rgba(0,0,0,.6),0 10px 30px rgba(0,0,0,.5);
+  transition:background .2s,border-color .2s;
+}
+.mobile-menu .mm-item:active{background:rgba(125,255,142,.12);border-color:var(--green)}
+.mobile-menu .mm-arrow{color:var(--green);font-weight:400}
 
 /* Landing tagline */
 .tagline{
@@ -339,7 +364,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .pick-overlay .pick-head h2 em{font-style:italic;color:var(--green);font-weight:400}
 .pick-overlay .pick-head .sub{font-size:10px;letter-spacing:.28em;color:var(--dim);margin-top:6px}
 .pick-overlay .pick-stage{flex:1;position:relative}
-.pick-overlay .pick-stage canvas{cursor:grab}
+.pick-overlay .pick-stage canvas{cursor:grab;touch-action:none}
 .pick-overlay .pick-stage canvas.dragging{cursor:grabbing}
 .pick-overlay .pick-foot{padding:18px 40px;display:flex;justify-content:space-between;align-items:center;gap:18px;border-top:1px solid var(--green-dim);background:linear-gradient(0deg, rgba(0,0,0,.85), transparent);}
 .pick-overlay .pick-foot .readout{display:flex;gap:24px;font-size:10.5px;letter-spacing:.22em;color:var(--dim)}
@@ -368,6 +393,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .sim .deploy{margin-top:16px;font-size:10px;letter-spacing:.22em;color:var(--dim);text-align:center;border:1px dashed var(--green-dim);padding:14px;color:var(--green)}
 
 .sim .stage{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.sim .stage canvas{touch-action:none}
 .sim .stage .sim-flash{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:2;mix-blend-mode:screen;will-change:opacity}
 .sim .stage .crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:280px;height:280px;border:1px dashed var(--green-dim);border-radius:50%;opacity:.4;pointer-events:none}
 .sim .stage .center-info{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);text-align:center;font-size:10px;letter-spacing:.32em;color:var(--dim);pointer-events:none;}
@@ -455,7 +481,7 @@ body:not([data-state="landing"]) .dim{opacity:1}
 .toast .small{display:block;font-size:9.5px;color:var(--dim);margin-top:8px;letter-spacing:.3em}
 .toast.red{border-color:var(--red);color:var(--red);box-shadow:0 0 0 1px #000, 0 0 40px var(--red-glow)}
 
-.corner-foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:center;padding:14px 22px;font-size:10px;letter-spacing:.22em;color:var(--dim);background:linear-gradient(to top, rgba(0,0,0,.7), transparent);z-index:11}
+.corner-foot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:center;padding:14px 22px;padding-bottom:max(14px,env(safe-area-inset-bottom));font-size:10px;letter-spacing:.22em;color:var(--dim);background:linear-gradient(to top, rgba(0,0,0,.7), transparent);z-index:11}
 .corner-foot .v{color:#fff}
 
 /* state-aware visibility */
@@ -491,40 +517,72 @@ body:not([data-state="landing"]) #dom-menu{opacity:0;pointer-events:none}
   .sim .stage .crosshair{opacity:.4}
 }
 
-/* ---------- Responsive (first pass) ---------- */
+/* ---------- Responsive ---------- */
 @media (max-width: 900px){
-  .topbar{padding:10px 14px;font-size:10px}
-  .topbar .l{gap:10px}
+  .topbar{padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));font-size:10px}
+  .topbar .l{gap:10px;min-width:0;flex-wrap:wrap}
   .topbar .r{gap:10px;flex-wrap:wrap;justify-content:flex-end}
-  .compass{width:92vw;top:56px}
-  .page-head{top:96px;left:16px;right:16px}
+  /* compass sits below the top bar; offsets below keep page content clear of it */
+  .compass{width:92vw;top:calc(58px + env(safe-area-inset-top))}
+  .page-head{top:calc(118px + env(safe-area-inset-top));left:16px;right:16px}
   .page-head h1{font-size:18px}
   .tagline .b{font-size:34px}
 
-  .arsenal,.cart{left:16px;right:16px;top:188px;bottom:16px;
+  .arsenal,.cart{left:16px;right:16px;top:calc(200px + env(safe-area-inset-top));
+    bottom:calc(46px + env(safe-area-inset-bottom));
     grid-template-columns:1fr;grid-auto-rows:minmax(0,auto);
-    display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+    display:flex;flex-direction:column;gap:16px;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .arsenal .col,.cart .items-wrap{min-height:auto}
   .arsenal .accordion,.arsenal .detail{max-height:none}
   .arsenal .cat.open .cat-body{max-height:1200px}
   .det-body{grid-template-columns:1fr}
+  .cart{grid-template-columns:1fr}
+  .cart .brief{grid-template-columns:1fr 1fr}
   .cart .item{grid-template-columns:1fr;gap:12px}
   .cart .item .target{align-items:flex-start}
   .cart .item .target input{width:100%}
 
-  .sim{left:0;right:0;top:188px;bottom:0;
-    display:flex;flex-direction:column;overflow-y:auto}
+  .sim{left:0;right:0;top:calc(200px + env(safe-area-inset-top));bottom:0;
+    display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:calc(46px + env(safe-area-inset-bottom))}
   .sim .picker,.sim .analytics{border:none;border-top:1px solid var(--line-2)}
   .sim .stage{min-height:46vh;order:-1}
-  .info{inset:178px 16px 16px;overflow-y:auto}
+  .info{inset:calc(200px + env(safe-area-inset-top)) 16px calc(46px + env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch}
   .info .dossier{grid-template-columns:1fr}
   .info .dossier .about{border-right:none;border-bottom:1px solid var(--line-2)}
 }
-@media (max-width: 560px){
-  .topbar .r span:nth-child(1),.topbar .r span:nth-child(2){display:none}
-  .pick-overlay .pick-head,.pick-overlay .pick-foot{padding:14px 18px;flex-wrap:wrap;gap:10px}
-  .pick-overlay .pick-head h2{font-size:24px}
-  .pick-overlay .pick-foot .readout{gap:14px;flex-wrap:wrap}
-  .info .glass-wrap{padding:36px 28px}
-  .info .msg .t{font-size:30px}
+
+/* Portrait phones: swap the orbiting 3D landing labels for a tappable stack */
+@media (max-width: 600px){
+  #dom-menu{display:none}
+  .mobile-menu{display:flex}
+
+  /* tighter, taller compass so neighbouring routes stay tappable on a phone */
+  .compass{--compass-gap:128px;width:96vw;height:54px}
+  .compass .item{font-size:9.5px;letter-spacing:.22em;padding:11px 0}
+  .compass .item.active{letter-spacing:.3em}
+
+  /* keep the top bar to a single, legible line */
+  .topbar .l .label,.topbar .l .sep{display:none}
+  .topbar .r span:nth-child(1),.topbar .r span:nth-child(2),.topbar .r span:nth-child(3){display:none}
+
+  .pick-overlay .pick-head,.pick-overlay .pick-foot{padding:14px 16px;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));flex-wrap:wrap;gap:10px}
+  .pick-overlay .pick-head h2{font-size:22px}
+  .pick-overlay .pick-foot{flex-direction:column;align-items:stretch}
+  .pick-overlay .pick-foot .readout{gap:12px 18px;flex-wrap:wrap;justify-content:space-between}
+  .pick-overlay .pick-foot .btn.add{width:100%;padding:16px;font-size:12px}
+
+  .tagline{bottom:max(40px,env(safe-area-inset-bottom))}
+  .tagline .b{font-size:30px}
+  .tagline .s{font-size:9px;letter-spacing:.28em}
+  .tagline .disclaimer{font-size:8.5px;letter-spacing:.24em}
+
+  .page-head h1{font-size:16px}
+  .page-head .meta{font-size:9px;gap:12px}
+  .info .glass-wrap{padding:32px 22px}
+  .info .msg .t{font-size:26px}
+  .det-head h2{font-size:26px}
+  .cart .summary .total .v,.stat-big .v{font-size:28px}
+  .corner-foot{font-size:9px;padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));justify-content:center;white-space:nowrap}
+  .corner-foot div:last-child{display:none}
 }

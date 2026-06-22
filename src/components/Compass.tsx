@@ -11,7 +11,7 @@ const COMPASS_ROUTES: { id: Route | 'landing'; label: string; disc?: boolean }[]
   { id: 'landing',     label: 'DISCONNECT', disc: true },
 ];
 
-const COMPASS_GAP = 200;
+const COMPASS_GAP_FALLBACK = 200;
 
 interface Props {
   route: Route;
@@ -27,6 +27,17 @@ export default function Compass({ route, onNavigate }: Props) {
   const rootRef       = useRef<HTMLDivElement>(null);
   const isHoveringRef = useRef(false);
   const initRef       = useRef(false);
+  // Per-item spacing is owned by CSS (--compass-gap) so it can shrink on mobile;
+  // JS reads it back to keep the track offset aligned with the centered reticle.
+  const gapRef        = useRef(COMPASS_GAP_FALLBACK);
+
+  const readGap = () => {
+    const el = rootRef.current;
+    if (!el) return gapRef.current;
+    const v = parseFloat(getComputedStyle(el).getPropertyValue('--compass-gap'));
+    if (!Number.isNaN(v) && v > 0) gapRef.current = v;
+    return gapRef.current;
+  };
 
   // Sync active index when route changes externally
   useEffect(() => {
@@ -37,15 +48,28 @@ export default function Compass({ route, onNavigate }: Props) {
   // Init track position on mount (no animation)
   useEffect(() => {
     if (trackRef.current) {
-      gsap.set(trackRef.current, { x: -(0 * COMPASS_GAP + 100), yPercent: -50 });
+      const gap = readGap();
+      gsap.set(trackRef.current, { x: -(0 * gap + gap / 2), yPercent: -50 });
     }
   }, []);
+
+  // Keep the centered item aligned with the reticle when the viewport changes.
+  useEffect(() => {
+    const onResize = () => {
+      if (!trackRef.current) return;
+      const gap = readGap();
+      gsap.set(trackRef.current, { x: -(activeIdx * gap + gap / 2) });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [activeIdx]);
 
   // Animate track on activeIdx change
   useEffect(() => {
     if (!trackRef.current) return;
+    const gap = readGap();
     gsap.to(trackRef.current, {
-      x: -(activeIdx * COMPASS_GAP + 100),
+      x: -(activeIdx * gap + gap / 2),
       duration: 0.55,
       ease: 'back.out(1.7)',
     });
